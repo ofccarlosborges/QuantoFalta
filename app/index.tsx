@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Text, Image } from "react-native";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Lottie from "lottie-react";
@@ -6,6 +7,8 @@ import animationIncomplete from "./src/animationIncomplete.json";
 import animationComplete from "./src/animationComplete.json";
 import catSad from "./src/catSad.json";
 import morte from "./src/morte.json";
+import { Link } from "expo-router";
+import qrCode from "./src/qrCode.jpg";
 
 import AntDesign from '@expo/vector-icons/AntDesign';
 
@@ -116,18 +119,49 @@ export default function AtividadesComplementares() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col overflow-auto">
+
+      <header>
+        <nav className="border-b border-gray-200 shadow-md shadow-gray-200 px-6 py-3">
+          <div className="flex justify-between items-center max-w-screen-xl mx-auto">
+
+            {/*Título */}
+            <h1 className="text-2xl text-center font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-purple-600">
+              Quanto Falta?
+            </h1>
+
+            {/* Links de navegação */}
+            <ul className="flex space-x-6">
+              <li>
+                <Link href="/" asChild>
+                  <Text className="text-gray-800 font-semibold text-lg transition-colors hover:text-blue-600">
+                    Atividade Complementar
+                  </Text>
+                </Link>
+              </li>
+              <li>
+                <Link href="/finalUEFS" asChild>
+                  <Text className="text-gray-800 font-semibold text-lg transition-colors hover:text-blue-600">
+                    Cálculo Final
+                  </Text>
+                </Link>
+              </li>
+            </ul>
+          </div>
+        </nav>
+      </header>
+
       <ToastContainer />
-      <main className="flex-1 container mx-auto p-8 mt-8">
+      <main className="flex-1 container mx-auto p-8 mt-7 bg-white">
         <div className="max-w-7xl mx-auto">
           <div className="flex-col  mb-8">
-            <h1 className="text-4xl font-extrabold text-center text-gray-800">
+            <h1 className="text-4xl font-extrabold text-center text-gray-500">
               Cálculo de
             </h1>
-            <h1 className="text-5xl text-center font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-purple-600 mb-5">
+            <h1 className="text-4xl text-center font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-purple-600 mb-5">
               Atividades Complementares
             </h1>
 
-            <p className="text-center text-gray-700 mt-2 text-bold">
+            <p className="text-center text-gray-700 mt-2 font-bold">
               Não precisa esperar pelo dia do juízo final onde o colegiado vai receber seus certificados e dar sua sentença. Facilitamos para que você possa ir acompanhando
             </p>
           </div>
@@ -338,8 +372,10 @@ export default function AtividadesComplementares() {
             <div className="flex justify-center items-center mt-2">
               <Lottie animationData={catSad} loop={true} style={{ height: 100, width: 100 }} />
             </div>
-            <p>...mas sem pressão.</p>
-            <p className="text-sm text-gray-600 mt-2">Exemplo: Chave PIX: 123.456.789-00</p>
+            <p>PIX:</p>
+            <div className="flex justify-center items-center">
+              <Image source={qrCode} style={{ width: 150, height: 150 }} />
+            </div>
           </div>
         )}
       </div>
