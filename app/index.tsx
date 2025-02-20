@@ -10,8 +10,6 @@ import morte from "./src/morte.json";
 import { Link } from "expo-router";
 import qrCode from "./src/qrCode.jpg";
 
-import AntDesign from '@expo/vector-icons/AntDesign';
-
 
 const atividadesOptions = [
   { nome: "Participação em projetos institucionais", tipo: "variavel", limiteIndividual: 0.25, limiteTotal: 0.75, icone: "🏛️", tooltip: "25% do total por ano (máximo de 3 anos). Limite total: 75%." },
@@ -36,12 +34,17 @@ interface Atividade {
 }
 
 export default function AtividadesComplementares() {
-  const [cargaTotal, setCargaTotal] = useState(0);
+  const [cargaTotal, setCargaTotal] = useState<string>("");
   const [atividades, setAtividades] = useState<Atividade[]>([]);
   const [atividadeSelecionada, setAtividadeSelecionada] = useState(atividadesOptions[0]);
-  const [cargaEvento, setCargaEvento] = useState(0);
-  const [quantidadeAtividade, setQuantidadeAtividade] = useState(1);
+  const [cargaEvento, setCargaEvento] = useState<string>("");
+  const [quantidadeAtividade, setQuantidadeAtividade] = useState<string>("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [formErrors, setFormErrors] = useState({
+    cargaTotal: false,
+    cargaEvento: false,
+    quantidade: false
+  });
 
   useEffect(() => {
     const savedAtividades = localStorage.getItem("atividades");
@@ -60,18 +63,36 @@ export default function AtividadesComplementares() {
     localStorage.setItem("atividades", JSON.stringify(atividades));
   }, [atividades]);
 
+  const validateInputs = () => {
+    const errors = {
+      cargaTotal: !cargaTotal || Number(cargaTotal) <= 0,
+      cargaEvento: atividadeSelecionada.tipo === "variavel" && (!cargaEvento || Number(cargaEvento) <= 0),
+      quantidade: atividadeSelecionada.tipo === "fixo" && (!quantidadeAtividade || Number(quantidadeAtividade) <= 0)
+    };
+    
+    setFormErrors(errors);
+    return !Object.values(errors).some(error => error);
+  };
+
   const adicionarAtividade = () => {
-    if (!cargaTotal) {
-      toast.error("Por favor, insira a carga horária total necessária.");
+    if (!validateInputs()) {
+      if (formErrors.cargaTotal) {
+        toast.error("Por favor, insira uma carga horária total válida maior que zero.");
+      } else if (formErrors.cargaEvento) {
+        toast.error("Por favor, insira uma carga horária de evento válida maior que zero.");
+      } else if (formErrors.quantidade) {
+        toast.error("Por favor, insira uma quantidade válida maior que zero.");
+      }
       return;
     }
 
+    const cargaTotalNum = Number(cargaTotal);
     const cargaAtual = atividades
       .filter(atv => atv.nome === atividadeSelecionada.nome)
       .reduce((acc, atv) => acc + atv.carga, 0);
 
-    let limiteTotalCalculado = atividadeSelecionada.limiteTotal * cargaTotal;
-    let limiteIndividualCalculado = atividadeSelecionada.limiteIndividual ? atividadeSelecionada.limiteIndividual * cargaTotal : Infinity;
+    let limiteTotalCalculado = atividadeSelecionada.limiteTotal * cargaTotalNum;
+    let limiteIndividualCalculado = atividadeSelecionada.limiteIndividual ? atividadeSelecionada.limiteIndividual * cargaTotalNum : Infinity;
 
     if (cargaAtual >= limiteTotalCalculado) {
       toast.error(`Carga horária máxima (${limiteTotalCalculado}h) já foi atingida para esta atividade.`);
@@ -80,13 +101,14 @@ export default function AtividadesComplementares() {
 
     let totalCarga = 0;
     if (atividadeSelecionada.tipo === "fixo") {
+      const quantidadeNum = Number(quantidadeAtividade);
       const cargaFixa = atividadeSelecionada.carga || 0;
-      totalCarga = Math.min(cargaFixa * quantidadeAtividade, limiteTotalCalculado - cargaAtual);
+      totalCarga = Math.min(cargaFixa * quantidadeNum, limiteTotalCalculado - cargaAtual);
       if (cargaAtual + totalCarga > atividadeSelecionada.limiteTotal) {
         totalCarga = atividadeSelecionada.limiteTotal - cargaAtual;
       }
     } else if (atividadeSelecionada.tipo === "variavel") {
-      totalCarga = Math.min(cargaEvento, limiteIndividualCalculado, limiteTotalCalculado - cargaAtual);
+      totalCarga = Math.min(Number(cargaEvento), limiteIndividualCalculado, limiteTotalCalculado - cargaAtual);
     }
 
     if (totalCarga <= 0 || isNaN(totalCarga)) {
@@ -95,8 +117,12 @@ export default function AtividadesComplementares() {
     }
 
     setAtividades([...atividades, { ...atividadeSelecionada, carga: totalCarga }]);
-    setQuantidadeAtividade(1);
-    setCargaEvento(0);
+    // Resetar apenas os valores específicos, mantendo a carga total
+    if (atividadeSelecionada.tipo === "fixo") {
+      setQuantidadeAtividade("");
+    } else {
+      setCargaEvento("");
+    }
     toast.success("Atividade adicionada com sucesso!");
   };
 
@@ -113,9 +139,16 @@ export default function AtividadesComplementares() {
   };
 
   const cargaCumprida = atividades.reduce((acc, atv) => acc + atv.carga, 0);
-  //const porcentagemCumprida = cargaTotal > 0 ? ((cargaCumprida / cargaTotal) * 100).toFixed(2) : "0";
-  const porcentagemCumprida = cargaTotal > 0 ? Math.min((cargaCumprida / cargaTotal) * 100, 100) : 0;
+  const cargaTotalNum = Number(cargaTotal) || 0;
+  const porcentagemCumprida = cargaTotalNum > 0 ? Math.min((cargaCumprida / cargaTotalNum) * 100, 100) : 0;
 
+  // Helper para renderizar os feedback visuais de erro
+  const renderErrorFeedback = (fieldHasError: boolean, message: string) => {
+    if (fieldHasError) {
+      return <p className="text-red-500 text-xs mt-1">{message}</p>;
+    }
+    return null;
+  };
 
   return (
     <div className="min-h-screen bg-white flex flex-col overflow-auto">
@@ -175,10 +208,16 @@ export default function AtividadesComplementares() {
                 <input
                   type="number"
                   value={cargaTotal}
-                  onChange={(e) => setCargaTotal(Number(e.target.value))}
-                  className="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  onChange={(e) => {
+                    setCargaTotal(e.target.value);
+                    if (formErrors.cargaTotal) {
+                      setFormErrors({...formErrors, cargaTotal: false});
+                    }
+                  }}
+                  className={`mt-1 block w-full p-3 border ${formErrors.cargaTotal ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-blue-500 focus:border-blue-500`}
                   placeholder="Ex.: 200"
                 />
+                {renderErrorFeedback(formErrors.cargaTotal, "Carga horária total é obrigatória e deve ser maior que zero")}
               </div>
 
               <div className="mb-6">
@@ -191,7 +230,15 @@ export default function AtividadesComplementares() {
                     const atividade = atividadesOptions.find(
                       (atv) => atv.nome === e.target.value
                     );
-                    if (atividade) setAtividadeSelecionada(atividade);
+                    if (atividade) {
+                      setAtividadeSelecionada(atividade);
+                      // Resetar os erros de validação específicos ao mudar o tipo
+                      setFormErrors({
+                        ...formErrors,
+                        cargaEvento: false,
+                        quantidade: false
+                      });
+                    }
                   }}
                   className="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 >
@@ -216,14 +263,17 @@ export default function AtividadesComplementares() {
                   </label>
                   <input
                     type="number"
-                    min="1"
                     value={quantidadeAtividade}
-                    onChange={(e) =>
-                      setQuantidadeAtividade(Math.max(1, Number(e.target.value)))
-                    }
-                    className="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    onChange={(e) => {
+                      setQuantidadeAtividade(e.target.value);
+                      if (formErrors.quantidade) {
+                        setFormErrors({...formErrors, quantidade: false});
+                      }
+                    }}
+                    className={`mt-1 block w-full p-3 border ${formErrors.quantidade ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                     placeholder="Ex.: 1"
                   />
+                  {renderErrorFeedback(formErrors.quantidade, "Quantidade é obrigatória e deve ser maior que zero")}
                 </div>
               )}
 
@@ -235,10 +285,16 @@ export default function AtividadesComplementares() {
                   <input
                     type="number"
                     value={cargaEvento}
-                    onChange={(e) => setCargaEvento(Number(e.target.value))}
-                    className="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    onChange={(e) => {
+                      setCargaEvento(e.target.value);
+                      if (formErrors.cargaEvento) {
+                        setFormErrors({...formErrors, cargaEvento: false});
+                      }
+                    }}
+                    className={`mt-1 block w-full p-3 border ${formErrors.cargaEvento ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-blue-500 focus:border-blue-500`}
                     placeholder="Ex.: 5"
                   />
+                  {renderErrorFeedback(formErrors.cargaEvento, "Carga horária do evento é obrigatória e deve ser maior que zero")}
                 </div>
               )}
 
@@ -331,7 +387,8 @@ export default function AtividadesComplementares() {
 
         {/* Tooltips para as atividades */}
         <section className="mt-8 p-8">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Regras das Atividades</h2>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">Regras das Atividades</h2>
+          <h3 className="text-sm font-semibold text-gray-800 mb-4">Seguindo a: RESOLUÇÃO CONSEPE Nº 172/2010 - UEFS</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {atividadesOptions.map((atv, index) => (
               <div key={index} className="bg-white p-4 rounded-lg shadow-xs border border-gray-300">
@@ -382,5 +439,4 @@ export default function AtividadesComplementares() {
 
     </div>
   );
-
 }
