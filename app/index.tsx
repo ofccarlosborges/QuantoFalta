@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Text, Image } from "react-native";
+import { Text, Image, TouchableOpacity } from "react-native";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Lottie from "lottie-react";
@@ -9,7 +9,8 @@ import catSad from "./src/catSad.json";
 import morte from "./src/morte.json";
 import { Link } from "expo-router";
 import qrCode from "./src/qrCode.jpg";
-
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import * as XLSX from 'xlsx';
 
 const atividadesOptions = [
   { nome: "Participação em projetos institucionais", tipo: "variavel", limiteIndividual: 0.25, limiteTotal: 0.75, icone: "🏛️", tooltip: "25% do total por ano (máximo de 3 anos). Limite total: 75%." },
@@ -63,16 +64,39 @@ export default function AtividadesComplementares() {
     localStorage.setItem("atividades", JSON.stringify(atividades));
   }, [atividades]);
 
+  // Adicione esse useEffect para carregar a carga total do localStorage
+  useEffect(() => {
+    const savedCargaTotal = localStorage.getItem("cargaTotal");
+    if (savedCargaTotal) {
+      try {
+        setCargaTotal(savedCargaTotal);
+      } catch (error) {
+        console.error("Erro ao carregar carga total do LocalStorage", error);
+        setCargaTotal("");
+      }
+    }
+  }, []);
+
+  // Adicione esse useEffect para salvar a carga total no localStorage
+  useEffect(() => {
+    if (cargaTotal) {
+      localStorage.setItem("cargaTotal", cargaTotal);
+    }
+  }, [cargaTotal]);
+
+
   const validateInputs = () => {
     const errors = {
       cargaTotal: !cargaTotal || Number(cargaTotal) <= 0,
       cargaEvento: atividadeSelecionada.tipo === "variavel" && (!cargaEvento || Number(cargaEvento) <= 0),
       quantidade: atividadeSelecionada.tipo === "fixo" && (!quantidadeAtividade || Number(quantidadeAtividade) <= 0)
     };
-    
+
     setFormErrors(errors);
     return !Object.values(errors).some(error => error);
   };
+
+
 
   const adicionarAtividade = () => {
     if (!validateInputs()) {
@@ -138,9 +162,30 @@ export default function AtividadesComplementares() {
     toast.info("Atividade removida.");
   };
 
+
   const cargaCumprida = atividades.reduce((acc, atv) => acc + atv.carga, 0);
   const cargaTotalNum = Number(cargaTotal) || 0;
   const porcentagemCumprida = cargaTotalNum > 0 ? Math.min((cargaCumprida / cargaTotalNum) * 100, 100) : 0;
+
+
+  // Adicione esta função para limpar todas as atividades
+  const limparTodasAtividades = () => {
+    // Mostra um diálogo de confirmação antes de limpar
+    if (window.confirm("Tem certeza que deseja remover todas as atividades?")) {
+      setAtividades([]);
+      // Opcional: manter a carga total ou limpar também
+      // Se quiser limpar também a carga total, descomente a linha abaixo
+      // setCargaTotal("");
+
+      // Atualiza o localStorage
+      localStorage.removeItem("atividades");
+      // Se decidir limpar a carga total também, descomente:
+      // localStorage.removeItem("cargaTotal");
+
+      toast.info("Todas as atividades foram removidas.");
+    }
+  };
+
 
   // Helper para renderizar os feedback visuais de erro
   const renderErrorFeedback = (fieldHasError: boolean, message: string) => {
@@ -149,6 +194,139 @@ export default function AtividadesComplementares() {
     }
     return null;
   };
+  // Nova função para exportar em XLSX
+  const exportarXLSX = () => {
+    // Preparar os dados
+    const workbookData = [
+      ['Relatório de Atividades Complementares - Quanto Falta?'],
+      [''],
+      ['Resumo'],
+      [`Carga Total Necessária: ${cargaTotalNum} horas`],
+      [`Carga Cumprida: ${cargaCumprida} horas (${porcentagemCumprida.toFixed(2)}%)`],
+      [''],
+      ['Atividade', 'Carga Horária']
+    ];
+
+    // Adicionar as atividades
+    atividades.forEach(atv => {
+      workbookData.push([
+        atv.nome,
+        atv.carga.toString(),
+      ]);
+    });
+
+    // Adicionar linha de total
+    workbookData.push([
+      'TOTAL',
+      cargaCumprida.toString(),
+      '',
+      ''
+    ]);
+
+    // Criar o workbook
+    const ws = XLSX.utils.aoa_to_sheet(workbookData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Atividades");
+
+    // Estilização (limitada no XLSX básico)
+    ws['!cols'] = [
+      { wch: 40 }, // A - Atividade
+      { wch: 15 }, // B - Carga Horária
+    ];
+
+    // Exportar o arquivo
+    XLSX.writeFile(wb, "atividades_complementares.xlsx");
+  };
+
+  // Nova função para exportar em PDF com formatação aprimorada
+  const exportarPDF = async () => {
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([595.28, 841.89]); // Tamanho A4 em pontos
+    const { width, height } = page.getSize();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    let yPosition = height - 50;
+
+    // Adicionar título
+    page.drawText('Relatório de Atividades Complementares', {
+      x: 50,
+      y: yPosition,
+      size: 16,
+      font: boldFont,
+      color: rgb(0, 0, 0),
+    });
+
+    yPosition -= 20;
+    page.drawText('Quanto Falta?', {
+      x: 50,
+      y: yPosition,
+      size: 14,
+      font: boldFont,
+      color: rgb(0.2, 0.2, 0.8),
+    });
+
+    yPosition -= 30;
+    page.drawText(`Carga Total Necessária: ${cargaTotalNum} horas`, { x: 50, y: yPosition, size: 12, font });
+    yPosition -= 15;
+    page.drawText(`Carga Cumprida: ${cargaCumprida} horas (${porcentagemCumprida.toFixed(2)}%)`, { x: 50, y: yPosition, size: 12, font, color: rgb(0, 0.5, 0) });
+
+    yPosition -= 30;
+    page.drawText('Atividades', { x: 50, y: yPosition, size: 12, font: boldFont, color: rgb(0, 0, 0) });
+    yPosition -= 15;
+
+    // Criar a tabela com bordas e espaçamento
+    const tableStartX = 50;
+    const tableStartY = yPosition;
+    const rowHeight = 25;
+    const colWidths = [350, 120];
+    const cellPadding = 5;
+
+    // Cabeçalho da tabela
+    page.drawText('Atividade', { x: tableStartX + cellPadding, y: tableStartY, size: 10, font: boldFont });
+    page.drawText('Carga Horária', { x: tableStartX + colWidths[0] + cellPadding, y: tableStartY, size: 10, font: boldFont });
+
+    yPosition -= rowHeight;
+    atividades.forEach((atv) => {
+      if (yPosition < 50) {
+        page.addPage();
+        yPosition = height - 50;
+      }
+
+      // Adicionar células
+      page.drawRectangle({
+        x: tableStartX,
+        y: yPosition - 5,
+        width: colWidths[0],
+        height: rowHeight,
+        borderColor: rgb(0.8, 0.8, 0.8),
+        borderWidth: 1,
+      });
+      page.drawRectangle({
+        x: tableStartX + colWidths[0],
+        y: yPosition - 5,
+        width: colWidths[1],
+        height: rowHeight,
+        borderColor: rgb(0.8, 0.8, 0.8),
+        borderWidth: 1,
+      });
+
+      page.drawText(atv.nome, { x: tableStartX + cellPadding, y: yPosition, size: 10, font });
+      page.drawText(atv.carga.toString(), { x: tableStartX + colWidths[0] + cellPadding, y: yPosition, size: 10, font });
+
+      yPosition -= rowHeight;
+    });
+
+    const pdfBytes = await pdfDoc.save();
+
+    // Criar o link para download
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'atividades_complementares.pdf';
+    link.click();
+  };
+
 
   return (
     <div className="min-h-screen bg-white flex flex-col overflow-auto">
@@ -211,7 +389,7 @@ export default function AtividadesComplementares() {
                   onChange={(e) => {
                     setCargaTotal(e.target.value);
                     if (formErrors.cargaTotal) {
-                      setFormErrors({...formErrors, cargaTotal: false});
+                      setFormErrors({ ...formErrors, cargaTotal: false });
                     }
                   }}
                   className={`mt-1 block w-full p-3 border ${formErrors.cargaTotal ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-blue-500 focus:border-blue-500`}
@@ -267,7 +445,7 @@ export default function AtividadesComplementares() {
                     onChange={(e) => {
                       setQuantidadeAtividade(e.target.value);
                       if (formErrors.quantidade) {
-                        setFormErrors({...formErrors, quantidade: false});
+                        setFormErrors({ ...formErrors, quantidade: false });
                       }
                     }}
                     className={`mt-1 block w-full p-3 border ${formErrors.quantidade ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
@@ -288,7 +466,7 @@ export default function AtividadesComplementares() {
                     onChange={(e) => {
                       setCargaEvento(e.target.value);
                       if (formErrors.cargaEvento) {
-                        setFormErrors({...formErrors, cargaEvento: false});
+                        setFormErrors({ ...formErrors, cargaEvento: false });
                       }
                     }}
                     className={`mt-1 block w-full p-3 border ${formErrors.cargaEvento ? 'border-red-500' : 'border-gray-300'} rounded-md focus:ring-blue-500 focus:border-blue-500`}
@@ -354,6 +532,20 @@ export default function AtividadesComplementares() {
 
             {/* Lista de Atividades */}
             <div className="bg-white p-8 rounded-xl border border-gray-300">
+              <div className="flex space-x-3 mb-6">
+                <TouchableOpacity
+                  onPress={exportarPDF}
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold py-2 px-4 rounded-lg transition transform hover:scale-105 shadow-md flex items-center justify-center"
+                >
+                  <span className="mr-1">📄</span> Baixar PDF
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={exportarXLSX}
+                  className="flex-1 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white font-semibold py-2 px-4 rounded-lg transition transform hover:scale-105 shadow-md flex items-center justify-center"
+                >
+                  <span className="mr-1">📊</span> Baixar Excel
+                </TouchableOpacity>
+              </div>
               <h2 className="text-2xl font-semibold text-gray-800 mb-6">
                 Atividades Adicionadas
               </h2>
@@ -361,6 +553,15 @@ export default function AtividadesComplementares() {
                 <p className="text-gray-500">Nenhuma atividade adicionada.</p>
               )}
               <div className="space-y-4">
+                <button
+                  onClick={limparTodasAtividades}
+                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md flex items-center gap-2 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Limpar Tudo
+                </button>
                 {atividades.map((atv, index) => (
                   <div
                     key={index}
